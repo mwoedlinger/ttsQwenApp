@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Qwen3 TTS Studio</title>
+  <style>
+    :root {
+      --bg:        #0f172a;
+      --surface:   #1e293b;
+      --surface2:  #293548;
+      --border:    #334155;
+      --primary:   #6366f1;
+      --pri-hover: #4f46e5;
+      --success:   #22c55e;
+      --danger:    #ef4444;
+      --warning:   #f59e0b;
+      --text:      #e2e8f0;
+      --muted:     #94a3b8;
+      --radius:    8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; font-weight: 700; }
+    header h1 em { font-style: normal; color: var(--primary); }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: var(--surface2);
+      font-size: 12px;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-not_loaded { background: var(--muted); }
+    .dot-loading    { background: var(--warning); animation: blink 1s infinite; }
+    .dot-ready      { background: var(--success); }
+    .dot-error      { background: var(--danger); }
+
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    main {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 24px 20px;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 780px) { main { grid-template-columns: 1fr; } }
+
+    /* ── Cards ───────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Form elements ───────────────────────────────────── */
+    .field { margin-bottom: 14px; }
+    label.lbl {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    input[type="text"], textarea, select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 8px 10px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color .15s;
+    }
+    input[type="text"]:focus,
+    textarea:focus,
+    select:focus { border-color: var(--primary); }
+    select option { background: var(--surface); }
+    textarea { resize: vertical; min-height: 90px; }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background .15s, opacity .15s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+    .btn-primary  { background: var(--primary);  color: #fff; }
+    .btn-primary:hover  { background: var(--pri-hover); }
+    .btn-danger   { background: var(--danger);   color: #fff; }
+    .btn-danger:hover   { background: #dc2626; }
+    .btn-ghost    { background: var(--surface2); color: var(--text); }
+    .btn-ghost:hover    { background: #3d4f64; }
+    .btn-success  { background: var(--success);  color: #fff; }
+    .btn-success:hover  { background: #16a34a; }
+    .btn-block    { width: 100%; }
+    .btn-sm       { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Audio-input tabs ────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .tab {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all .15s;
+    }
+    .tab.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    .pane { display: none; }
+    .pane.on { display: block; }
+
+    /* ── Recording button ────────────────────────────────── */
+    .rec-ring {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .rec-btn {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      border: 2px solid var(--danger);
+      background: transparent;
+      color: var(--danger);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .rec-btn.live {
+      background: var(--danger);
+      color: #fff;
+      animation: blink 1.2s infinite;
+    }
+    .rec-meta { font-size: 12px; color: var(--muted); }
+    .rec-meta strong { display: block; color: var(--text); font-size: 13px; }
+
+    .mini-audio {
+      width: 100%;
+      height: 36px;
+      margin-top: 8px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    /* ── Drop-zone ───────────────────────────────────────── */
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 6px;
+      padding: 18px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .dropzone:hover,
+    .dropzone.over { border-color: var(--primary); background: rgba(99,102,241,.06); }
+    .dropzone input { display: none; }
+    .dropzone .hint { font-size: 12px; color: var(--muted); }
+
+    /* ── Voice list ──────────────────────────────────────── */
+    .voice-list { display: flex; flex-direction: column; gap: 6px; }
+    .voice-card {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: var(--surface2);
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color .15s;
+    }
+    .voice-card:hover    { border-color: #475569; }
+    .voice-card.selected { border-color: var(--primary); background: rgba(99,102,241,.1); }
+    .voice-card-info     { flex: 1; min-width: 0; }
+    .voice-card-name     { font-weight: 600; font-size: 13px; }
+    .voice-card-sub      { font-size: 11px; color: var(--muted); margin-top: 2px;
+                           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .empty-note { text-align: center; padding: 20px; color: var(--muted); font-size: 13px; }
+
+    /* ── Generate panel ──────────────────────────────────── */
+    .text-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .text-header .lbl { margin: 0; flex: 1; }
+
+    .charcount { font-size: 11px; color: var(--muted); margin-top: 3px; text-align: right; }
+
+    .output-box {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--surface2);
+      border-radius: 6px;
+    }
+    .output-box.on { display: block; }
+    .output-box audio { width: 100%; margin-bottom: 12px; }
+    .output-actions { display: flex; gap: 8px; justify-content: center; }
+
+    /* ── Spinner ─────────────────────────────────────────── */
+    .spin {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: rotate .7s linear infinite;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+
+    /* ── Toasts ──────────────────────────────────────────── */
+    #toasts {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 999;
+    }
+    .toast {
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      max-width: 340px;
+      animation: slide-in .25s ease;
+    }
+    .toast.success { background: var(--success); color: #fff; }
+    .toast.error   { background: var(--danger);  color: #fff; }
+    .toast.info    { background: var(--primary); color: #fff; }
+    @keyframes slide-in {
+      from { transform: translateX(110%); opacity: 0; }
+      to   { transform: translateX(0);   opacity: 1; }
+    }
+
+    hr.sep { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Qwen3 <em>TTS</em> Studio</h1>
+  <div class="status-pill">
+    <div class="dot dot-not_loaded" id="statusDot"></div>
+    <span id="statusText">Checking…</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ══ LEFT: Voice Profiles ══════════════════════════════ -->
+  <div>
+    <div class="card">
+      <div class="card-title">Register Voice</div>
+
+      <div class="field">
+        <label class="lbl">Profile name</label>
+        <input type="text" id="vName" placeholder="e.g. My Voice">
+      </div>
+
+      <!-- Audio input: record or upload -->
+      <div class="field">
+        <label class="lbl">Reference audio (3–30 s of your voice)</label>
+        <div class="tabs">
+          <button class="tab on" id="tabRecBtn" onclick="switchTab('rec')">Record</button>
+          <button class="tab"    id="tabUpBtn"  onclick="switchTab('up')">Upload</button>
+        </div>
+
+        <!-- Record pane -->
+        <div class="pane on" id="paneRec">
+          <div class="rec-ring">
+            <button class="rec-btn" id="recBtn" onclick="toggleRec()" title="Record / Stop">
+              <svg id="recIcon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="12" r="8"/>
+              </svg>
+            </button>
+            <div class="rec-meta">
+              <strong id="recLabel">Click to start recording</strong>
+              <span id="recTimer"></span>
+            </div>
+          </div>
+          <audio id="recAudio" class="mini-audio" controls></audio>
+        </div>
+
+        <!-- Upload pane -->
+        <div class="pane" id="paneUp">
+          <label class="dropzone" id="audioDropzone"
+                 ondragover="dz(event,'over')" ondragleave="dz(event,'out')" ondrop="dzDrop(event)">
+            <input type="file" id="audioFile" accept="audio/*" onchange="pickAudio(event)">
+            <div class="hint" id="audioHint">
+              Click or drag&nbsp;&amp;&nbsp;drop an audio file<br>
+              <span style="font-size:10px">WAV · MP3 · FLAC · OGG · M4A</span>
+            </div>
+          </label>
+          <audio id="upAudio" class="mini-audio" controls></audio>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl">Transcript
+          <span style="font-weight:400"> — exactly what is spoken in the clip</span>
+        </label>
+        <textarea id="vTranscript" rows="3"
+          placeholder="Type the exact words spoken in the reference audio…"></textarea>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="regBtn" onclick="registerVoice()">
+        Register Voice
+      </button>
+
+      <!-- Saved profiles list -->
+      <hr class="sep">
+      <div style="font-size:12px; font-weight:600; color:var(--muted); margin-bottom:8px">
+        SAVED PROFILES
+      </div>
+      <div id="voiceList" class="voice-list">
+        <div class="empty-note">No voices registered yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RIGHT: Generate Speech ════════════════════════════ -->
+  <div>
+    <div class="card">
+      <div class="card-title">Generate Speech</div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px" class="field">
+        <div>
+          <label class="lbl">Voice profile</label>
+          <select id="voiceSel">
+            <option value="">— select a profile —</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl">Language</label>
+          <select id="langSel">
+            <option value="Auto">Auto-detect</option>
+            <option value="English">English</option>
+            <option value="Chinese">Chinese</option>
+            <option value="Japanese">Japanese</option>
+            <option value="Korean">Korean</option>
+            <option value="German">German</option>
+            <option value="French">French</option>
+            <option value="Russian">Russian</option>
+            <option value="Portuguese">Portuguese</option>
+            <option value="Spanish">Spanish</option>
+            <option value="Italian">Italian</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="text-header">
+          <label class="lbl">Text to synthesize</label>
+          <label class="btn btn-ghost btn-sm" style="cursor:pointer">
+            Upload .txt
+            <input type="file" accept=".txt,text/plain" style="display:none" onchange="loadTxtFile(event)">
+          </label>
+        </div>
+        <textarea id="ttsText" rows="10"
+          placeholder="Enter the text you want to convert to speech…&#10;&#10;Or upload a .txt file using the button above."
+          oninput="onTextInput()"></textarea>
+        <div class="charcount" id="charCount">0 characters</div>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="genBtn"
+              onclick="generate()" disabled>
+        Generate Speech
+      </button>
+
+      <!-- Output -->
+      <div class="output-box" id="outputBox">
+        <audio id="outAudio" controls></audio>
+        <div class="output-actions">
+          <a id="dlLink" class="btn btn-success" download="output.wav">Download WAV</a>
+          <button class="btn btn-ghost"
+                  onclick="document.getElementById('outputBox').classList.remove('on')">
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toasts"></div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let modelStatus = 'not_loaded';
+let activeTab   = 'rec';
+let mediaRec    = null;
+let recChunks   = [];
+let recBlob     = null;
+let recTimerID  = null;
+let recSecs     = 0;
+let uploadFile  = null;  // File object from file picker
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+pollStatus();
+setInterval(pollStatus, 3500);
+
+document.getElementById('voiceSel').addEventListener('change', refreshGenBtn);
+document.getElementById('ttsText').addEventListener('input', refreshGenBtn);
+
+// ─── Status polling ─────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    modelStatus = d.model_status;
+    renderStatus(d.model_status, d.model_error);
+    renderVoiceList(d.voices || []);
+    refreshGenBtn();
+    document.getElementById('regBtn').disabled = d.model_status !== 'ready';
+  } catch (_) {
+    renderStatus('error', 'Cannot reach server');
+  }
+}
+
+function renderStatus(s, err) {
+  const dot  = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  dot.className = `dot dot-${s}`;
+  const map = {
+    not_loaded: 'Model not loaded',
+    loading:    'Loading model…',
+    ready:      'Model ready',
+    error:      `Error: ${err || 'unknown'}`,
+  };
+  text.textContent = map[s] || s;
+}
+
+// ─── Voice list rendering ───────────────────────────────────────────────────
+function renderVoiceList(names) {
+  const list = document.getElementById('voiceList');
+  const sel  = document.getElementById('voiceSel');
+  const prev = sel.value;
+
+  if (!names.length) {
+    list.innerHTML = '<div class="empty-note">No voices registered yet.</div>';
+    sel.innerHTML  = '<option value="">— select a profile —</option>';
+    return;
+  }
+
+  list.innerHTML = names.map(n => `
+    <div class="voice-card ${n === prev ? 'selected' : ''}" id="vc-${CSS.escape(n)}"
+         onclick="pickVoice('${n.replace(/'/g,"\\'")}')">
+      <div class="voice-card-info">
+        <div class="voice-card-name">${escHtml(n)}</div>
+      </div>
+      <button class="btn btn-danger btn-sm"
+              onclick="event.stopPropagation(); delVoice('${n.replace(/'/g,"\\'")}')">
+        Delete
+      </button>
+    </div>`).join('');
+
+  sel.innerHTML = '<option value="">— select a profile —</option>' +
+    names.map(n => `<option value="${escHtml(n)}" ${n===prev?'selected':''}>${escHtml(n)}</option>`).join('');
+}
+
+function pickVoice(name) {
+  document.getElementById('voiceSel').value = name;
+  document.querySelectorAll('.voice-card').forEach(c =>
+    c.classList.toggle('selected', c.id === `vc-${CSS.escape(name)}`));
+  refreshGenBtn();
+}
+
+async function delVoice(name) {
+  if (!confirm(`Delete voice "${name}"?`)) return;
+  const r = await fetch(`/api/voices/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  if (r.ok) { toast(`Deleted "${name}"`, 'info'); pollStatus(); }
+  else { const d = await r.json(); toast(d.detail || 'Delete failed', 'error'); }
+}
+
+// ─── Audio tabs ─────────────────────────────────────────────────────────────
+function switchTab(t) {
+  activeTab = t;
+  ['rec','up'].forEach(id => {
+    document.getElementById(`tab${id === 'rec' ? 'Rec' : 'Up'}Btn`)
+            .classList.toggle('on', id === t);
+    document.getElementById(`pane${id === 'rec' ? 'Rec' : 'Up'}`)
+            .classList.toggle('on', id === t);
+  });
+}
+
+// ─── Recording ──────────────────────────────────────────────────────────────
+async function startRec() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recChunks = [];
+
+    const mime = ['audio/wav','audio/webm;codecs=opus','audio/webm','audio/ogg']
+                   .find(m => MediaRecorder.isTypeSupported(m)) || '';
+    mediaRec = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+
+    mediaRec.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
+    mediaRec.onstop = () => {
+      recBlob = new Blob(recChunks, { type: mediaRec.mimeType });
+      const url = URL.createObjectURL(recBlob);
+      const a = document.getElementById('recAudio');
+      a.src = url; a.style.display = 'block';
+      stream.getTracks().forEach(t => t.stop());
+      document.getElementById('recLabel').textContent = 'Recording saved — ready to use';
+    };
+
+    mediaRec.start();
+    recSecs = 0;
+    recTimerID = setInterval(() => {
+      recSecs++;
+      const m = String(Math.floor(recSecs/60)).padStart(2,'0');
+      const s = String(recSecs%60).padStart(2,'0');
+      document.getElementById('recTimer').textContent = `${m}:${s}`;
+    }, 1000);
+
+    document.getElementById('recBtn').classList.add('live');
+    document.getElementById('recIcon').innerHTML =
+      '<rect x="6" y="6" width="12" height="12" rx="2"/>';
+    document.getElementById('recLabel').textContent = 'Recording… click to stop';
+  } catch (e) {
+    toast('Microphone access denied. Allow it in browser settings.', 'error');
+  }
+}
+
+function stopRecUI() {
+  clearInterval(recTimerID);
+  document.getElementById('recBtn').classList.remove('live');
+  document.getElementById('recIcon').innerHTML = '<circle cx="12" cy="12" r="8"/>';
+}
+
+async function toggleRec() {
+  if (mediaRec && mediaRec.state === 'recording') {
+    mediaRec.stop();   // onstop handler fires asynchronously and sets recBlob
+    stopRecUI();
+  } else {
+    await startRec();
+  }
+}
+
+// ─── Audio file upload ───────────────────────────────────────────────────────
+function pickAudio(e) { setAudioFile(e.target.files[0]); }
+
+function setAudioFile(file) {
+  if (!file) return;
+  uploadFile = file;
+  const url = URL.createObjectURL(file);
+  const a = document.getElementById('upAudio');
+  a.src = url; a.style.display = 'block';
+  document.getElementById('audioHint').textContent = file.name;
+}
+
+function dz(e, cls) {
+  e.preventDefault();
+  document.getElementById('audioDropzone').classList.toggle('over', cls === 'over');
+}
+function dzDrop(e) {
+  e.preventDefault();
+  dz(e, 'out');
+  const f = e.dataTransfer.files[0];
+  if (f) setAudioFile(f);
+}
+
+// ─── Register voice ──────────────────────────────────────────────────────────
+async function registerVoice() {
+  const name       = document.getElementById('vName').value.trim();
+  const transcript = document.getElementById('vTranscript').value.trim();
+
+  if (!name)       { toast('Enter a voice name', 'error'); return; }
+  if (!transcript) { toast('Enter the transcript', 'error'); return; }
+
+  let blob, filename;
+  if (activeTab === 'rec') {
+    if (!recBlob) { toast('Record audio first', 'error'); return; }
+    blob = recBlob; filename = 'recording.webm';
+  } else {
+    if (!uploadFile) { toast('Upload an audio file first', 'error'); return; }
+    blob = uploadFile; filename = uploadFile.name;
+  }
+
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('transcript', transcript);
+  fd.append('audio', blob, filename);
+
+  const btn = document.getElementById('regBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Registering…';
+
+  try {
+    const r = await fetch('/api/voices', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Registration failed');
+
+    toast(`Voice "${name}" registered!`, 'success');
+    // Reset form
+    document.getElementById('vName').value = '';
+    document.getElementById('vTranscript').value = '';
+    recBlob = null; uploadFile = null;
+    document.getElementById('recAudio').style.display = 'none';
+    document.getElementById('upAudio').style.display  = 'none';
+    document.getElementById('recLabel').textContent = 'Click to start recording';
+    document.getElementById('recTimer').textContent  = '';
+    document.getElementById('audioHint').innerHTML   =
+      'Click or drag&amp;drop an audio file<br><span style="font-size:10px">WAV · MP3 · FLAC · OGG · M4A</span>';
+    await pollStatus();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Register Voice';
+  }
+}
+
+// ─── Text file loading ───────────────────────────────────────────────────────
+function loadTxtFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('ttsText').value = ev.target.result;
+    onTextInput();
+    toast(`Loaded "${file.name}"`, 'info');
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function onTextInput() {
+  const n = document.getElementById('ttsText').value.length;
+  document.getElementById('charCount').textContent = `${n.toLocaleString()} character${n!==1?'s':''}`;
+  refreshGenBtn();
+}
+
+function refreshGenBtn() {
+  const voice = document.getElementById('voiceSel').value;
+  const text  = document.getElementById('ttsText').value.trim();
+  document.getElementById('genBtn').disabled = !(modelStatus === 'ready' && voice && text);
+}
+
+// ─── Generate ────────────────────────────────────────────────────────────────
+async function generate() {
+  const voice    = document.getElementById('voiceSel').value;
+  const text     = document.getElementById('ttsText').value.trim();
+  const language = document.getElementById('langSel').value;
+  if (!voice || !text) return;
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Generating…';
+
+  try {
+    const r = await fetch('/api/generate', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ voice, text, language }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Generation failed');
+
+    const audio = document.getElementById('outAudio');
+    // Cache-bust so the browser always re-fetches the new file
+    audio.src = d.audio_url + '?t=' + Date.now();
+    audio.load();
+
+    const link = document.getElementById('dlLink');
+    link.href = d.audio_url;
+    link.download = `${voice}_output.wav`;
+
+    document.getElementById('outputBox').classList.add('on');
+    audio.play().catch(() => {});
+    toast('Audio generated!', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Speech';
+    refreshGenBtn();
+  }
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.getElementById('toasts').prepend(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity .3s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 320);
+  }, 4500);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
